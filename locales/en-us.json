@@ -1,0 +1,19 @@
+{
+    "Language": "English",
+    "Translate": {
+        "cfg_enable_changer_name": "Enable Real-Time Sync",
+        "cfg_enable_changer_desc": "Enable syncing the raid environment time with the real world. When disabled, raid time progression will return to normal.",
+        
+        "cfg_utc_offset_name": "UTC Time Offset",
+        "cfg_utc_offset_desc": "Customize the UTC timezone offset for real-time synchronization (defaults to UTC+8).",
+        
+        "cfg_daylight_saving_name": "Enable Daylight Saving Time",
+        "cfg_daylight_saving_desc": "Enable to adjust the synced time for Daylight Saving Time (adds an extra +1 hour to the UTC offset).",
+        
+        "cfg_infinite_raid_name": "Immersive Mode",
+        "cfg_infinite_raid_desc": "When enabled, pressing O in-raid replaces the countdown timer with a 24-hour real-world clock. Raid time limits will be removed, and the MIA status will be disabled.",
+        
+        "cfg_show_real_time_name": "Display Real-World Time",
+        "cfg_show_real_time_desc": "When enabled in non-immersive normal raids, pressing O will display both 'Raid Time | Real Time' on standard maps, or just 'Real Time' on Factory."
+    }
+}
