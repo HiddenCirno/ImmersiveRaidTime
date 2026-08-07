@@ -8,6 +8,7 @@ using JsonType;
 using System;
 using TMPro;
 using UnityEngine;
+using EFT.Communications;
 
 namespace ImmersiveRaidTime
 {
@@ -55,13 +56,13 @@ namespace ImmersiveRaidTime
                     {
                         //刷新时间
                         PluginsCore.CorrectGameWorld.GameDateTime.Reset(targetTime, targetTime, 1f);
-                        NotificationManagerClass.DisplayMessageNotification($"战局时间流速已同步现实速度。");
+                        NotificationManager.DisplayMessageNotification($"战局时间流速已同步现实速度。");
                     }
                     else
                     {
                         //恢复时间
                         PluginsCore.CorrectGameWorld.GameDateTime.Reset(TimeHelper.GetUTCTime(), TimeHelper.GetTarkovTime(), 7f);
-                        NotificationManagerClass.DisplayMessageNotification($"战局时间流速已恢复游戏速度。");
+                        NotificationManager.DisplayMessageNotification($"战局时间流速已恢复游戏速度。");
                     }
                     //Console.WriteLine(PluginsCore.CorrectGameWorld.GameDateTime.DateTime_0.ToString() + PluginsCore.CorrectGameWorld.GameDateTime.DateTime_1.ToString());
                     //NotificationManagerClass.DisplayMessageNotification($"真实时间已同步！当前战局时钟调整为: {targetTime.ToString("HH:mm:ss")}");
@@ -84,10 +85,10 @@ namespace ImmersiveRaidTime
             {
                 //重定义变量名
                 var timer = gameInstance.GameTimer;
-                ref var raidStartTime = ref timer.Nullable_0;
-                ref var raidEscapeTime = ref timer.Nullable_1;
-                ref var raidStopTime = ref timer.Nullable_2;
-                ref var raidEndTime = ref timer.Nullable_3;
+                ref var raidStartTime = ref timer._startDateTime;
+                ref var raidEscapeTime = ref timer._escapeDateTime;
+                ref var raidStopTime = ref timer.nullable_2;
+                var raidEndTime = timer.SessionTime;
                 //找到右上角的计时器面板
                 var mainTimerPanel = UnityEngine.Object.FindObjectOfType<MainTimerPanel>();
                 if (CfgManager.EnableRaidTimeChanger.Value && CfgManager.ImmersiveInfiniteRaid.Value)
@@ -133,7 +134,7 @@ namespace ImmersiveRaidTime
                 if (mainTimerPanel != null)
                 {
                     //这个不能删，因为恢复时间还得更新一下计时器
-                    AccessTools.Field(typeof(TimerPanel), "dateTime_0").SetValue(mainTimerPanel, raidEscapeTime);
+                    AccessTools.Field(typeof(TimerPanel), "_dateTime").SetValue(mainTimerPanel, raidEscapeTime);
                 }
             }
             catch (Exception err)
@@ -142,7 +143,7 @@ namespace ImmersiveRaidTime
             }
         }
         //让选图界面显示真实时间的Patch
-        [HarmonyPatch(typeof(LocationConditionsPanel), "method_1")]
+        [HarmonyPatch(typeof(LocationConditionsPanel), nameof(LocationConditionsPanel.UpdateConditions))]
         public static class LocationConditionsPanel_ShowTime_Patch
         {
             [HarmonyPostfix]
@@ -156,9 +157,9 @@ namespace ImmersiveRaidTime
                     var cureentTime = (TextMeshProUGUI)AccessTools.Field(targetClass, "_currentPhaseTime")?.GetValue(__instance);
                     var inverseTime = (TextMeshProUGUI)AccessTools.Field(targetClass, "_nextPhaseTime")?.GetValue(__instance);
                     if (cureentTime == null) return;
-                    bool isChosingMap = (bool)(AccessTools.Field(targetClass, "bool_1")?.GetValue(__instance) ?? false);
+                    bool isChosingMap = (bool)(AccessTools.Field(targetClass, "_takeFromCurrent")?.GetValue(__instance) ?? false);
                     //无视工厂地图
-                    bool isNotFactory = (bool)(AccessTools.Field(targetClass, "bool_0")?.GetValue(__instance) ?? true);
+                    bool isNotFactory = (bool)(AccessTools.Field(targetClass, "_needTimerUpdate")?.GetValue(__instance) ?? true);
                     EDateTime selectedTimePhase = __instance.SelectedDateTime;
                     //傻逼BSG
                     if (isNotFactory)
@@ -186,7 +187,7 @@ namespace ImmersiveRaidTime
             }
         }
         //捕获玩家选择白图还是夜图的Patch
-        [HarmonyPatch(typeof(LocationConditionsPanel), "Set")]
+        [HarmonyPatch(typeof(LocationConditionsPanel), nameof(LocationConditionsPanel.Set))]
         public static class LocationConditionsPanel_Set_Patch
         {
             [HarmonyPostfix]
@@ -202,7 +203,7 @@ namespace ImmersiveRaidTime
             }
         }
         //修改战局计时器显示的Patch
-        [HarmonyPatch(typeof(TimerPanel), "SetTimerText")]
+        [HarmonyPatch(typeof(TimerPanel), nameof(TimerPanel.SetTimerText))]
         public class TimerPanel_SetTimerText_Patch
         {
             [HarmonyPrefix]
@@ -220,7 +221,7 @@ namespace ImmersiveRaidTime
             }
         }
         //在开始游戏时刷新时间设置的Patch
-        [HarmonyPatch(typeof(GameWorld), "OnGameStarted")]
+        [HarmonyPatch(typeof(GameWorld), nameof(GameWorld.OnGameStarted))]
         public class GameWorld_OnGameStarted_Patch
         {
             [HarmonyPostfix]
@@ -240,7 +241,7 @@ namespace ImmersiveRaidTime
             }
         }
         //在地图加载完成前应用时间修改的Patch
-        [HarmonyPatch(typeof(BaseLocalGame<EftGamePlayerOwner>), "method_3")]
+        [HarmonyPatch(typeof(BaseLocalGame<EftGamePlayerOwner>), nameof(BaseLocalGame<EftGamePlayerOwner>.InitWeather))]
         public static class LocalGame_InitTime_Patch
         {
             [HarmonyPostfix]
@@ -251,7 +252,7 @@ namespace ImmersiveRaidTime
                 {
                     var targetType = __instance.GetType();
                     //反射读取地图ID
-                    var location = AccessTools.Field(targetType, "Location_0")?.GetValue(__instance) as LocationSettingsClass.Location;
+                    var location = AccessTools.Field(targetType, "location")?.GetValue(__instance) as LocationSettings.Location;
                     if (location != null && location.Id.Contains("factory")) return;
                     //反射读取时间控制器
                     var gameDateTime = AccessTools.Property(targetType, "GameDateTime")?.GetValue(__instance) as GameDateTime;
@@ -270,7 +271,7 @@ namespace ImmersiveRaidTime
             }
         }
         //修改单击O键的QOL时间显示结果的Patch
-        [HarmonyPatch(typeof(LocationTimeUIPanel), "method_0")]
+        [HarmonyPatch(typeof(LocationTimeUIPanel), nameof(LocationTimeUIPanel.ShowTimeWithIcon))]
         public class LocationTimeUIPanel_ShowTime_Patch
         {
             [HarmonyPostfix]
@@ -314,7 +315,7 @@ namespace ImmersiveRaidTime
             }
         }
         //劫持QOL时间显示的Patch
-        [HarmonyPatch(typeof(LocationTimeUIPanel), "Initialize")]
+        [HarmonyPatch(typeof(LocationTimeUIPanel), nameof(LocationTimeUIPanel.Initialize))]
         public class LocationTimeUIPanel_Initialize_Patch
         {
             [HarmonyPostfix]
