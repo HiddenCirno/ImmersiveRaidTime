@@ -17,8 +17,7 @@ namespace ImmersiveRaidTime
         //判断选择的时间点
         public static bool IsInvertedTime = false;
         //缓存战局时间
-        private static DateTime? _tempRaidEscapeTime;
-        private static TimeSpan? _tempRaidEndTime;
+        private static TimeSpan? _tempRaidSessionTime;   // 原战局时长（用于恢复）
         private static DateTime? _pauseTime;
         //处理时间的工具方法
         public static class TimeHelper
@@ -85,51 +84,43 @@ namespace ImmersiveRaidTime
             {
                 //重定义变量名
                 var timer = gameInstance.GameTimer;
-                ref var raidStartTime = ref timer._startDateTime;
                 ref var raidEscapeTime = ref timer._escapeDateTime;
-                ref var raidStopTime = ref timer.nullable_2;
-                var raidEndTime = timer.SessionTime;
                 //找到右上角的计时器面板
                 var mainTimerPanel = UnityEngine.Object.FindObjectOfType<MainTimerPanel>();
                 if (CfgManager.EnableRaidTimeChanger.Value && CfgManager.ImmersiveInfiniteRaid.Value)
                 {
-                    //缓存当前战局倒计时
-                    if (_tempRaidEscapeTime == null || _tempRaidEndTime == null)
+                    //缓存当前战局时长（SessionTime），用于恢复
+                    if (_tempRaidSessionTime == null)
                     {
-                        _tempRaidEscapeTime = raidEscapeTime;
-                        _tempRaidEndTime = raidEndTime;
+                        _tempRaidSessionTime = timer.SessionTime;
                     }
                     //记录暂停的瞬间
                     //切换到伪无限时长相当于暂停了原有的战局计时器
                     _pauseTime = new DateTime?(DateTime.UtcNow);
-                    //无限拉长战局时间
-                    //我们的征途是星辰大海！
-                    raidEscapeTime = new DateTime?(new DateTime(2200, 1, 1));
-                    raidEndTime = raidEscapeTime - raidStartTime;
-                    //if (!isInitialLoad) NotificationManagerClass.DisplayMessageNotification("沉浸模式已激活：战局时限已解除，计时器已切换为真实时钟。");
+                    //把真正的战局时长（SessionTime）拉长到 2200-01-01
+                    //注意：MIA/迷失判定依据是 SessionTime（见 EndByTimerScenario），
+                    //之前只改了 _escapeDateTime 只影响 UI 显示，这里必须改 SessionTime 才能真正禁用迷失
+                    //彩蛋：我们的征途是星辰大海，直到 2200 年 1 月 1 日！
+                    DateTime endDate = new DateTime(2200, 1, 1);
+                    TimeSpan infiniteDuration = endDate - (timer.StartDateTime ?? DateTime.UtcNow);
+                    timer.ChangeSessionTime(infiniteDuration);
+                    //ChangeSessionTime 内部会自动把 _escapeDateTime 同步为 StartDateTime + SessionTime，
+                    //并触发 SessionTimeChanged 事件更新计时器面板，无需再手动改 _escapeDateTime
                 }
                 else
                 {
                     //从缓存恢复时间
-                    if (_tempRaidEscapeTime == null || _tempRaidEndTime == null) return;
+                    if (_tempRaidSessionTime == null) return;
                     //空值合并，防御性判定
                     _pauseTime ??= new DateTime?(DateTime.UtcNow);
                     //计算从暂停到现在过去了多久
                     TimeSpan totalPauseTime = DateTime.UtcNow - _pauseTime.Value;
-                    //将启动时间和结束时间向后推迟，即把战局整体时间段向后平移
-                    raidEscapeTime = _tempRaidEscapeTime + totalPauseTime;
-                    raidEndTime = _tempRaidEndTime + totalPauseTime;
+                    //恢复原战局时长，并把暂停期间向后平移（把战局整体时间段向后推迟）
+                    timer.ChangeSessionTime(_tempRaidSessionTime.Value + totalPauseTime);
                     //清除缓存
-                    _tempRaidEscapeTime = null;
-                    _tempRaidEndTime = null;
+                    _tempRaidSessionTime = null;
                     _pauseTime = null;
-                    //if (!isInitialLoad) NotificationManagerClass.DisplayMessageNotification("常规战局已恢复：已重连原版撤离倒计时系统。");
                 }
-                //这个需要清空吗？
-                //总之清了
-                //gameInstance.GameTimer.Nullable_2 = null;
-                //好吧，大概不需要
-                //出bug了再加回来就是
                 //反射更新倒计时面板
                 if (mainTimerPanel != null)
                 {
